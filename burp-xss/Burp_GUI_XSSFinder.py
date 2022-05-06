@@ -52,7 +52,7 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IMessageEditorController,
         return self._splitpane
 
     def processHttpMessage(self, toolFlag, messageIsRequest, messageInfo):
-        if messageIsRequest or ".css" in self._helpers.analyzeRequest(messageInfo).getUrl().toString():
+        if messageIsRequest or ".css" in self._helpers.analyzeRequest(messageInfo).getUrl().toString() or toolFlag ==self._callbacks.TOOL_REPEATER:
             return
         analyIRequestInfo = self._helpers.analyzeRequest(messageInfo)
         headers = analyIRequestInfo.getHeaders()
@@ -68,13 +68,17 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IMessageEditorController,
                 first_str = '='
                 head, sep, tail = i.partition(first_str)
                 resstr = resstr + '&' + str(head).replace(' ', '') + '=xxxxxx'
+            if resstr =="":
+                return
             POCURL = URL + "?" + resstr
-        self._lock.acquire()
-        row = self._log.size()
-        self._log.add(LogEntry(toolFlag, self._callbacks.saveBuffersToTempFiles(messageInfo),
-                               self._helpers.analyzeRequest(messageInfo).getUrl(), POCURL))
-        self.fireTableRowsInserted(row, row)
-        self._lock.release()
+            self._lock.acquire()
+            row = self._log.size()
+            self._log.add(LogEntry(toolFlag, self._callbacks.saveBuffersToTempFiles(messageInfo),
+                                   self._helpers.analyzeRequest(messageInfo).getUrl(), POCURL))
+            self.fireTableRowsInserted(row, row)
+            self._lock.release()
+        else:
+            return
 
     def getRowCount(self):
         try:
