@@ -19,26 +19,16 @@ import re
 
 
 class BurpExtender(IBurpExtender, ITab, IHttpListener, IMessageEditorController, AbstractTableModel):
-    #
-    # implement IBurpExtender
-    #
     def registerExtenderCallbacks(self, callbacks):
-        # keep a reference to our callbacks object
         self._callbacks = callbacks
-        # obtain an extension helpers object
         self._helpers = callbacks.getHelpers()
-        # set our extension name
         callbacks.setExtensionName("Xss logger")
-        # create the log and a lock on which to synchronize when adding log entries
         self._log = ArrayList()
         self._lock = Lock()
-        # main split pane
         self._splitpane = JSplitPane(JSplitPane.VERTICAL_SPLIT)
-        # table of log entries
         logTable = Table(self)
         scrollPane = JScrollPane(logTable)
         self._splitpane.setLeftComponent(scrollPane)
-        # tabs with request/response viewers
         tabs = JTabbedPane()
         self._requestViewer = callbacks.createMessageEditor(self, False)
         self._responseViewer = callbacks.createMessageEditor(self, False)
@@ -47,32 +37,22 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IMessageEditorController,
         tabs.addTab("Response", self._responseViewer.getComponent())
         tabs.addTab("XSS_FUZZ_Param", self._POCURLViewer.getComponent())
         self._splitpane.setRightComponent(tabs)
-        # customize our UI components
         callbacks.customizeUiComponent(self._splitpane)
         callbacks.customizeUiComponent(logTable)
         callbacks.customizeUiComponent(scrollPane)
         callbacks.customizeUiComponent(tabs)
-        # add the custom tab to Burp's UI
         callbacks.addSuiteTab(self)
-        # register ourselves as an HTTP listener
         callbacks.registerHttpListener(self)
         return
 
-    #
-    # implement ITab
-    #
     def getTabCaption(self):
         return "Logger"
 
     def getUiComponent(self):
         return self._splitpane
 
-    #
-    # implement IHttpListener
-    #
     def processHttpMessage(self, toolFlag, messageIsRequest, messageInfo):
-        # only process requests
-        if messageIsRequest or ".css"  in self._helpers.analyzeRequest(messageInfo).getUrl().toString():
+        if messageIsRequest or ".css" in self._helpers.analyzeRequest(messageInfo).getUrl().toString():
             return
         analyIRequestInfo = self._helpers.analyzeRequest(messageInfo)
         headers = analyIRequestInfo.getHeaders()
@@ -80,7 +60,6 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IMessageEditorController,
         analyzedResponse = self._helpers.analyzeResponse(messageInfo.getResponse())
         statusCode = analyzedResponse.getStatusCode()
         if statusCode == 200:
-            # 上面引入的help类解析传入的信息
             resp = messageInfo.getResponse()
             body = resp[analyzedResponse.getBodyOffset():].tostring()
             result = re.findall('var(.*)=.*', body)
@@ -90,19 +69,12 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IMessageEditorController,
                 head, sep, tail = i.partition(first_str)
                 resstr = resstr + '&' + str(head).replace(' ', '') + '=xxxxxx'
             POCURL = URL + "?" + resstr
-            # print POCURL
-            # print "\r\n"
-        # create a new log entry with the message details
         self._lock.acquire()
         row = self._log.size()
         self._log.add(LogEntry(toolFlag, self._callbacks.saveBuffersToTempFiles(messageInfo),
-                               self._helpers.analyzeRequest(messageInfo).getUrl(),POCURL))
+                               self._helpers.analyzeRequest(messageInfo).getUrl(), POCURL))
         self.fireTableRowsInserted(row, row)
         self._lock.release()
-
-    #
-    # extend AbstractTableModel
-    #
 
     def getRowCount(self):
         try:
@@ -132,11 +104,6 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IMessageEditorController,
             return logEntry._pocurl
         return ""
 
-    #
-    # implement IMessageEditorController
-    # this allows our request/response viewers to obtain details about the messages being displayed
-    #
-
     def getHttpService(self):
         return self._currentlyDisplayedItem.getHttpService()
 
@@ -147,29 +114,20 @@ class BurpExtender(IBurpExtender, ITab, IHttpListener, IMessageEditorController,
         return self._currentlyDisplayedItem.getResponse()
 
 
-#
-# extend JTable to handle cell selection
-#
-
 class Table(JTable):
     def __init__(self, extender):
         self._extender = extender
         self.setModel(extender)
 
     def changeSelection(self, row, col, toggle, extend):
-        # show the log entry for the selected row
         logEntry = self._extender._log.get(row)
         self._extender._requestViewer.setMessage(logEntry._requestResponse.getRequest(), True)
         self._extender._responseViewer.setMessage(logEntry._requestResponse.getResponse(), False)
-        self._extender._POCURLViewer.setMessage(logEntry._pocurl,True)
+        self._extender._POCURLViewer.setMessage(logEntry._pocurl, True)
         self._extender._currentlyDisplayedItem = logEntry._requestResponse
 
         JTable.changeSelection(self, row, col, toggle, extend)
 
-
-#
-# class to hold details of each log entry
-#
 
 class LogEntry:
     def __init__(self, tool, requestResponse, url, POCURL):
